@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 
 	if(-1 == SocketFD)
 	{
-		perror("can not create socket");
+		perror("Cannot create socket");
 		exit(EXIT_FAILURE);
 	}
 
@@ -82,14 +82,14 @@ int main(int argc, char *argv[])
 
 	if(-1 == bind(SocketFD,(const void *)&stSockAddr, sizeof(stSockAddr)))
 	{
-		perror("error bind failed");
+		perror("Socket bind failed");
 		close(SocketFD);
 		exit(EXIT_FAILURE);
 	}
 
 	if(-1 == listen(SocketFD, 10))
 	{
-		perror("error listen failed");
+		perror("Listen failed");
 		close(SocketFD);
 		exit(EXIT_FAILURE);
 	}
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
 
 		if(0 > ConnectFD)
 		{
-			perror("error accept failed");
+			perror("Accept failed");
 			close(SocketFD);
 			exit(EXIT_FAILURE);
 		}
@@ -127,4 +127,3 @@ int main(int argc, char *argv[])
 	close(ConnectFD);
 	return 0;
 }
-
