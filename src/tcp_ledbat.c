@@ -24,7 +24,7 @@
 #define  DEBUG_NOISE_FILTER  0
 #define  DEBUG_BASE_HISTO    0
 
-/* NOTE: *len are the actual length - 1 */
+/* NOTE: len are the actual length - 1 */
 static int base_histo_len    = 10;
 static int noise_filter_len  = 4;
 static int target            = 100;
@@ -87,16 +87,14 @@ struct ledbat {
 	u32 remote_hz;
 	u32 remote_ref_time;
 	u32 local_ref_time;
-	u32 snd_cwnd_cnt;
-
+	u32 snd_cwnd_cnt; /* already in struct tcp_sock but we need 32 bits. */
+    u32 last_ack;
 	struct owd_circ_buf base_history;
 	struct owd_circ_buf noise_filter;
-
 	u32 flag;            
 };
 
-static
-int ledbat_init_circbuf(
+static int ledbat_init_circbuf(
 	struct owd_circ_buf *buffer, 
 	u16 len)
 {
@@ -116,7 +114,7 @@ static void tcp_ledbat_release(struct sock *sk)
 	struct ledbat *ledbat = inet_csk_ca(sk);
 	kfree(ledbat->noise_filter.buffer);
 	kfree(ledbat->base_history.buffer);
-	printk( KERN_DEBUG "structure released...\n");
+	printk( KERN_DEBUG "ledbat structure released.\n");
 }
 
 /**
@@ -128,7 +126,6 @@ static void tcp_ledbat_init(struct sock *sk)
 
 	ledbat_init_circbuf( &(ledbat->base_history), 
 				  base_histo_len + 1);
-
 	ledbat_init_circbuf( &(ledbat->noise_filter), 
 				  noise_filter_len + 1);
 
@@ -137,17 +134,21 @@ static void tcp_ledbat_init(struct sock *sk)
 	ledbat->remote_hz = 0;
 	ledbat->remote_ref_time = 0;
 	ledbat->local_ref_time = 0;
-	printk( KERN_DEBUG "structure initialized...\n");
+    ledbat->snd_cwnd_cnt = 0;
+    ledbat->last_ack = 0;
+
 	if (do_ss) {
 		ledbat->flag |= LEDBAT_CAN_SS;
 	}
+
+	printk( KERN_DEBUG "ledbat structure initialized.\n");
 }
 
 typedef u32 (*ledbat_filter_function)(struct owd_circ_buf *);
 
 static u32 ledbat_min_circ_buff(struct owd_circ_buf *b) {
     /* 
-    During initialization in the draft all the history is set to +infinity. 
+    The draft requires all history to be set to +infinity on initialization. 
     We obtain the same behavior returning +infinity in case of empty history.
     */
 	if (b->first == b->next)
@@ -160,17 +161,12 @@ u32 ledbat_current_delay(struct ledbat *ledbat, ledbat_filter_function filter) {
 	return filter(&(ledbat->noise_filter));
 }
 
-static
-u32 ledbat_base_delay(struct ledbat *ledbat) {
+static u32 ledbat_base_delay(struct ledbat *ledbat) {
 	return ledbat_min_circ_buff(&(ledbat->base_history));
 }
 
-static
-void print_delay(struct owd_circ_buf *cb, char *name) {
-	u16 curr;
-	
-	curr = cb->first;
-
+static void print_delay(struct owd_circ_buf *cb, char *name) {
+	u16 curr = cb->first;
 	printk( KERN_DEBUG "%s: time %u ", name, tcp_time_stamp);
 
 	while (curr != cb->next) {
@@ -233,19 +229,21 @@ static void tcp_ledbat_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 	if (!tcp_is_cwnd_limited(sk, in_flight))
 		return;
 
-	if (tp->snd_cwnd <= 1) {
+	if (tp->snd_cwnd <= 1)
 		ledbat->flag |= LEDBAT_CAN_SS;
-	}
 
 	if (do_ss >= DO_SLOWSTART && tp->snd_cwnd <= tcp_ledbat_ssthresh(sk) && 
-        (ledbat->flag & LEDBAT_CAN_SS)) {
+        (ledbat->flag & LEDBAT_CAN_SS)) 
+    {
 #if DEBUG_SLOW_START
 		printk(KERN_DEBUG "slow_start!!! clamp %d cwnd %d sshthresh %d \n", 
 			tp->snd_cwnd_clamp, tp->snd_cwnd, tp->snd_ssthresh);
 #endif
 		tcp_slow_start(tp);
 		return;
-	} else {
+	} 
+    else 
+    {
 		ledbat->flag &= ~LEDBAT_CAN_SS;
 	}
 
@@ -266,22 +264,22 @@ static void tcp_ledbat_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 	printk ( KERN_DEBUG
         "time %u, queue_delay %lld, offset %lld cwnd_cnt %u, "
         "cwnd %u, delay %lld, min %lld\n", 
-        tcp_time_stamp, queue_delay, offset, tp->snd_cwnd_cnt, tp->snd_cwnd, 
+        tcp_time_stamp, queue_delay, offset, ledbat->snd_cwnd_cnt, tp->snd_cwnd, 
         current_delay, base_delay);
 #endif
 
 	/* calculate the new cwnd_cnt */
-	cwnd = tp->snd_cwnd_cnt + offset;
+	cwnd = ledbat->snd_cwnd_cnt + offset;
 	if (cwnd >= 0) 
 	{
 	  /* if we have a positive number update the cwnd_count */
-		tp->snd_cwnd_cnt = cwnd;
-		if (tp->snd_cwnd_cnt >= max_cwnd) 
+		ledbat->snd_cwnd_cnt = cwnd;
+		if (ledbat->snd_cwnd_cnt >= max_cwnd) 
 		{
 		  /* increase the cwnd */
 			if (tp->snd_cwnd < tp->snd_cwnd_clamp)
 				tp->snd_cwnd++;
-			tp->snd_cwnd_cnt = 0;
+			ledbat->snd_cwnd_cnt = 0;
 		} 
 	} 
 	else 
@@ -291,7 +289,7 @@ static void tcp_ledbat_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 		{
 			tp->snd_cwnd--;
 			/* set the cwnd_cnt to the max value - target */
-			tp->snd_cwnd_cnt = (tp->snd_cwnd - 1) * target;
+			ledbat->snd_cwnd_cnt = (tp->snd_cwnd - 1) * target;
 		 } 
 		 else 
 		 {
@@ -335,7 +333,8 @@ static u32 tcp_ledbat_remote_hz_estimator(struct sock *sk)
 	if (m < 0)
 		m = -m;
 
-	if (rhz > 0) {
+	if (rhz > 0) 
+    {
 		m -= rhz >> 6;	/* m is now wrong in remote HZ est */
 		rhz += m;	/* 63/64 old + 1/64 new */
 	} else
@@ -376,10 +375,10 @@ static u32 tcp_ledbat_owd_calculator(struct sock *sk)
 
 	ledbat->remote_hz = tcp_ledbat_remote_hz_estimator(sk);
 
-	if (ledbat->flag & LEDBAT_VALID_RHZ) {
-		owd =
-		    tp->rx_opt.rcv_tsval * (LP_RESOL / ledbat->remote_hz) -
-		    tp->rx_opt.rcv_tsecr * (LP_RESOL / HZ);
+	if (ledbat->flag & LEDBAT_VALID_RHZ) 
+    {
+		owd = tp->rx_opt.rcv_tsval * (LP_RESOL / ledbat->remote_hz) -
+		      tp->rx_opt.rcv_tsecr * (LP_RESOL / HZ);
 		if (owd < 0)
 			owd = -owd;
 	}
@@ -418,16 +417,16 @@ static void ledbat_add_delay(struct owd_circ_buf *cb, u32 owd) {
 	cb->buffer[cb->next] = owd;
 	/* update the min if it is the case*/
 	if (owd < cb->buffer[cb->min]) 
-	{
 		cb->min = cb->next;
-	}
+
 	/* increment the next pointer*/
 	cb->next = (cb->next + 1) % cb->len;
 
 	if (cb->next == cb->first)
-	{ /* Discard the first element */ 
-
-		if ( cb->min == cb->first ) {
+	{ 
+        /* Discard the first element */ 
+		if ( cb->min == cb->first ) 
+        {
 			/* Discard the min, search a new one */
 			cb->min = i = (cb->first + 1) % cb->len;
 			while ( i != cb->next ) {
@@ -436,7 +435,6 @@ static void ledbat_add_delay(struct owd_circ_buf *cb, u32 owd) {
 				i = (i+1) % cb->len;
 			}
 		}
-
 		/* move the first */
 		cb->first = (cb->first + 1) % cb->len;
 	}
@@ -517,8 +515,24 @@ static void tcp_ledbat_rtt_sample(struct sock *sk, u32 rtt)
  */
 static void tcp_ledbat_pkts_acked(struct sock *sk, u32 num_acked, s32 rtt_us)
 {
+	struct ledbat *ledbat = inet_csk_ca(sk);
+	struct tcp_sock *tp = tcp_sk(sk);
+
 	if (rtt_us > 0)
 		tcp_ledbat_rtt_sample(sk, rtt_us);
+
+    if (ledbat->last_ack == 0)
+    {
+        ledbat->last_ack = tcp_time_stamp;
+    } 
+    else if (before(tcp_time_stamp, ledbat->last_ack + (tp->srtt >> 3)))
+    {
+        /* we haven't receive an acknoledgement for more than an rtt.
+           Set the congestion window to 1. */
+        ledbat->last_ack = tcp_time_stamp;
+        tp->snd_cwnd = 1;
+    }
+
 }
 
 static u32 tcp_ledbat_min_cwnd(const struct sock *sk)
