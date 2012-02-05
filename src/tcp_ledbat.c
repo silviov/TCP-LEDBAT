@@ -358,14 +358,8 @@ static u32 tcp_ledbat_remote_hz_estimator(struct sock *sk)
 /**
  * tcp_ledbat_owd_calculator
  *
- * XXX old comment from lp authors...
- *
- * Calculate one way delay (in relative format).
- * Original implements OWD as minus of remote time difference to local time
- * difference directly. As this time difference just simply equal to RTT, when
- * the network status is stable, remote RTT will equal to local RTT, and result
- * OWD into zero.
- * It seems to be a bug and so we fixed it.
+ * I stole this code from tcp_lp.c. Please also see comment for 
+ * tcp_lp_owd_calculator.
  */
 static u32 tcp_ledbat_owd_calculator(struct sock *sk)
 {
@@ -383,12 +377,7 @@ static u32 tcp_ledbat_owd_calculator(struct sock *sk)
 			owd = -owd;
 	}
 	
-	/*	owd = tp->rx_opt.rcv_tsval - tp->rx_opt.rcv_tsecr;
-	owd *= LP_RESOL / HZ;
-
-	if (owd < 0)
-	owd = -owd; */
-
+    /* Safe net. */
 	if (owd > 0)
 		ledbat->flag |= LEDBAT_VALID_OWD;
 	else
@@ -400,8 +389,8 @@ static u32 tcp_ledbat_owd_calculator(struct sock *sk)
 	return owd;
 }
 
-static void ledbat_add_delay(struct owd_circ_buf *cb, u32 owd) {
-
+static void ledbat_add_delay(struct owd_circ_buf *cb, u32 owd) 
+{
 	u8 i;
 
 	if (cb->next == cb->first) 
