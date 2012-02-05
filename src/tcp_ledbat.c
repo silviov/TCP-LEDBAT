@@ -254,7 +254,8 @@ static void tcp_ledbat_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 	queue_delay = current_delay - base_delay;
 	offset = ((s64)target) - (queue_delay);
 
-	offset *= gain_num; offset /= gain_den;
+	offset *= gain_num; 
+	offset  = do_div(offset, gain_den);
 
 	/* Do not ramp more than TCP. */
 	if (offset > target)
