@@ -114,7 +114,6 @@ static void tcp_ledbat_release(struct sock *sk)
 	struct ledbat *ledbat = inet_csk_ca(sk);
 	kfree(ledbat->noise_filter.buffer);
 	kfree(ledbat->base_history.buffer);
-	printk( KERN_DEBUG "ledbat structure released.\n");
 }
 
 /**
@@ -141,7 +140,6 @@ static void tcp_ledbat_init(struct sock *sk)
 		ledbat->flag |= LEDBAT_CAN_SS;
 	}
 
-	printk( KERN_DEBUG "ledbat structure initialized.\n");
 }
 
 typedef u32 (*ledbat_filter_function)(struct owd_circ_buf *);
