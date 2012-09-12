@@ -6,7 +6,7 @@ default:
 	$(MAKE) -C $(KDIR) SUBDIRS=$(PWD) modules
 
 install:
-	cp tcp_ledbat.ko  $(IDIR)
+	install -v -m 644 tcp_ledbat.ko $(IDIR)
 	depmod
 	modprobe tcp_ledbat
 	sysctl -w net.ipv4.tcp_allowed_congestion_control="cubic reno ledbat"
