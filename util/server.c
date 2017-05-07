@@ -47,10 +47,6 @@ void parse_opt(int argc, char *argv[], options_data * opts)
 void my_rec(int rec_socket)
 {
 	char buffer[DIRSIZE];
-	int quick_ack = 1;
-
-//      setsockopt(rec_socket, IPPROTO_TCP, TCP_QUICKACK, 
-	//&quick_ack, sizeof(quick_ack));
 	for (;;) {
 		if (recv(rec_socket, buffer, DIRSIZE, 0) < 0) {
 			perror("recv");
@@ -62,63 +58,63 @@ void my_rec(int rec_socket)
 int main(int argc, char *argv[])
 {
 	options_data options;
-	struct sockaddr_in stSockAddr;
-	int SocketFD = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-	int ConnectFD;
+	struct sockaddr_in sockaddr;
+	int sfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+	int cfd;
 	pid_t pid;
 
 	parse_opt(argc, argv, &options);
 
-	if (-1 == SocketFD) {
+	if (-1 == sfd) {
 		perror("Cannot create socket");
 		exit(EXIT_FAILURE);
 	}
 
-	memset(&stSockAddr, 0, sizeof(stSockAddr));
+	memset(&sockaddr, 0, sizeof(sockaddr));
 
-	stSockAddr.sin_family = AF_INET;
-	stSockAddr.sin_port = htons(options.port);
-	stSockAddr.sin_addr.s_addr = INADDR_ANY;
+	sockaddr.sin_family = AF_INET;
+	sockaddr.sin_port = htons(options.port);
+	sockaddr.sin_addr.s_addr = INADDR_ANY;
 
-	if (-1 == bind(SocketFD, (const void *)&stSockAddr, sizeof(stSockAddr))) {
+	if (-1 == bind(sfd, (const void *)&sockaddr, sizeof(sockaddr))) {
 		perror("Socket bind failed");
-		close(SocketFD);
+		close(sfd);
 		exit(EXIT_FAILURE);
 	}
 
-	if (-1 == listen(SocketFD, 10)) {
+	if (-1 == listen(sfd, 10)) {
 		perror("Listen failed");
-		close(SocketFD);
+		close(sfd);
 		exit(EXIT_FAILURE);
 	}
 
 	for (;;) {
-		int ConnectFD = accept(SocketFD, NULL, NULL);
+		int cfd = accept(sfd, NULL, NULL);
 
-		if (0 > ConnectFD) {
+		if (0 > cfd) {
 			perror("Accept failed");
-			close(SocketFD);
+			close(sfd);
 			exit(EXIT_FAILURE);
 		}
 
 		switch (pid = fork()) {
 		case 0:	//child process
-			close(SocketFD);
-			my_rec(ConnectFD);
+			close(sfd);
+			my_rec(cfd);
 			exit(0);
 			break;
 		case -1:	//error
 			perror("fork");
-			close(ConnectFD);
+			close(cfd);
 			exit(1);
 			break;
 		default:	//parent process
-			shutdown(ConnectFD, SHUT_RDWR);
+			shutdown(cfd, SHUT_RDWR);
 			break;
 		}
 
 	}
 
-	close(ConnectFD);
+	close(cfd);
 	return 0;
 }
