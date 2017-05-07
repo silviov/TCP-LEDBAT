@@ -13,61 +13,64 @@
 #define DIRSIZE     8192
 
 typedef struct _options {
-		char *hostname;
-		uint16_t port;
-		uint32_t count;
-		uint16_t duration;
+	char *hostname;
+	uint16_t port;
+	uint32_t count;
+	uint16_t duration;
 } options_data;
 
-void end_program(int signal) {
+void end_program(int signal)
+{
 	fprintf(stderr, "exiting after duration!!!\n");
 	exit(0);
 }
 
-void print_help(char *progname) {
-	printf("Usage: %s [-p port] [-t duration] [-c count] hostname\n", progname);
+void print_help(char *progname)
+{
+	printf("Usage: %s [-p port] [-t duration] [-c count] hostname\n",
+	       progname);
 }
 
-void parse_opt(int argc, char *argv[], options_data *opts)
+void parse_opt(int argc, char *argv[], options_data * opts)
 {
-		int opt;
+	int opt;
 
-		opts->hostname = "";
-		opts->port     = 5001; //same as iperf
-		opts->count    = 0;
-		opts->duration = 0;
+	opts->hostname = "";
+	opts->port = 5001;	//same as iperf
+	opts->count = 0;
+	opts->duration = 0;
 
-		while ((opt = getopt(argc, argv, "hp:c:t:")) != -1) {
-			switch (opt) {
-			case 'p':
-				opts->port = atoi(optarg);
-				break;
-			case 'c':
-				opts->count = atoi(optarg);
-				break;
-			case 't':
-				opts->duration = atoi(optarg);
-				break;
-			default:
-			case 'h':
-				print_help(argv[0]);
-				exit(EXIT_SUCCESS);
-			}
+	while ((opt = getopt(argc, argv, "hp:c:t:")) != -1) {
+		switch (opt) {
+		case 'p':
+			opts->port = atoi(optarg);
+			break;
+		case 'c':
+			opts->count = atoi(optarg);
+			break;
+		case 't':
+			opts->duration = atoi(optarg);
+			break;
+		default:
+		case 'h':
+			print_help(argv[0]);
+			exit(EXIT_SUCCESS);
 		}
+	}
 
-		if (optind >= argc) {
-			fprintf(stderr, "Expected hostname\n");
-			exit(EXIT_FAILURE);
-		}
+	if (optind >= argc) {
+		fprintf(stderr, "Expected hostname\n");
+		exit(EXIT_FAILURE);
+	}
 
-		opts->hostname = argv[optind];
-		return;
+	opts->hostname = argv[optind];
+	return;
 }
 
 int main(int argc, char *argv[])
 {
 	char dir[DIRSIZE];
-	int	sd;
+	int sd;
 	struct sockaddr_in sin;
 	struct sockaddr_in pin;
 	struct hostent *hp;
@@ -96,14 +99,14 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	/*set the congestion control algorithm to ledbat*/
-	if ( setsockopt(sd, SOL_TCP, TCP_CONGESTION, "ledbat", 6) == -1 ) {
+	/*set the congestion control algorithm to ledbat */
+	if (setsockopt(sd, SOL_TCP, TCP_CONGESTION, "ledbat", 6) == -1) {
 		perror("setsockopt");
 		exit(EXIT_FAILURE);
 	}
 
 	/* connect to the host */
-	if (connect(sd,(struct sockaddr *)  &pin, sizeof(pin)) == -1) {
+	if (connect(sd, (struct sockaddr *)&pin, sizeof(pin)) == -1) {
 		perror("connect");
 		exit(EXIT_FAILURE);
 	}
@@ -113,18 +116,17 @@ int main(int argc, char *argv[])
 	}
 
 	int n = DIRSIZE, count = 0;
-	memset (dir, 1, DIRSIZE);
+	memset(dir, 1, DIRSIZE);
 	while (1) {
-		if ( send(sd, dir, n, 0) == -1 ) {
+		if (send(sd, dir, n, 0) == -1) {
 			perror("send");
 			exit(EXIT_FAILURE);
 		}
 		count += n;
-		if ( opts.count > 0 && count > opts.count ) {
-				exit(EXIT_SUCCESS);
+		if (opts.count > 0 && count > opts.count) {
+			exit(EXIT_SUCCESS);
 		}
 	}
 
 	close(sd);
 }
-
