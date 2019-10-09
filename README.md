@@ -29,7 +29,7 @@ $ make
 * load the module
 
 ```shell
-$ sudo insmod tcp_ledbat.ko
+$ sudo make install
 ```
 
 ## How to use the module
