@@ -504,11 +504,24 @@ static void tcp_ledbat_pkts_acked(struct sock *sk,
 
 }
 
+/**
+ * tcp_ledbat_undo_cwnd
+ * required starting kernel v4.10, see
+ * kernel commmit e97991832a4ea4a5f47d65f068a4c966a2eb5730
+ */
+static u32 tcp_ledbat_undo_cwnd(struct sock *sk)
+{
+	/* this is the default v4.9 behavior */
+	const struct tcp_sock *tp = tcp_sk(sk);
+	return max(tp->snd_cwnd, tp->snd_ssthresh << 1);
+}
+
 static struct tcp_congestion_ops tcp_ledbat = {
 	.init = tcp_ledbat_init,
 	.ssthresh = tcp_ledbat_ssthresh,
 	.cong_avoid = tcp_ledbat_cong_avoid,
 	.pkts_acked = tcp_ledbat_pkts_acked,
+	.undo_cwnd = tcp_ledbat_undo_cwnd,
 	.release = tcp_ledbat_release,
 
 	.owner = THIS_MODULE,
