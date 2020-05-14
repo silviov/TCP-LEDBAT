@@ -3,7 +3,7 @@
 This is an implementation of the LEDBAT congestion control algorithm over TCP
 using the Linux kernel modular congestion control framework.
 
-The current version is updated to compile under Linux kernel 4.9.x versions. A version
+The current version is updated to compile under Linux kernel 4.19.x versions. A version
 working with kernels up to 3.3.x is tagged with a "3.3" tag. The module has not been tested
 with version in between.
 
